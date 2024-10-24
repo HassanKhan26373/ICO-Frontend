@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BNB Testnet ICO</title>
+    <!-- <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js@1.6.1/dist/web3.min.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.0/ethers.umd.min.js"></script>
+    <script src="https://unpkg.com/web3@latest/dist/web3.min.js"></script>
+    <!-- <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
+    /> -->
+  </head>
+  <body>
+    <h1>BNB Testnet ICO</h1>
+
+    <p>Connect to MetaMask and interact with the ICO contract on BNB Testnet</p>
+
+    <!-- <button id="connectButton">Connect Wallet</button> -->
+
+    <div id="prepare">
+      <button class="btn btn-primary" id="btn-connect">Connect Wallet</button>
+    </div>
+
+    <p>Wallet Address: <span id="walletAddress"></span></p>
+
+    <h2>Buy Tokens</h2>
+    <p>Rate: 1 BNB = 1000 Tokens</p>
+
+    <input type="text" id="bnbAmount" placeholder="Amount of BNB" />
+    <button id="approveButton" onclick="transferAndApproveTokens()">
+      Transfer And Approve Tokens
+    </button>
+    <button id="buyButton" onclick="buyTokens()">Buy Tokens</button>
+
+    <div>
+      <h2>Withdraw Funds (Only for admin)</h2>
+      <button onclick="withdrawFunds()">Withdraw Funds</button>
+    </div>
+
+    <div>
+      <h2>Withdraw Unsold Tokens (Only for admin)</h2>
+      <button onclick="withdrawUnsoldTokens()">Withdraw Unsold Tokens</button>
+    </div>
+
+    <div>
+      <h2>ICO Details</h2>
+      <button onclick="getICODetails()">Get ICO Details</button>
+      <pre id="icoDetails"></pre>
+    </div>
+
+    <!-- <div id="deployIcoDiv">
+      <h2>Deploy ICO Contract</h2>
+      <form id="deployIcoForm">
+        <label for="tokenAddress">Token Address:</label>
+        <input
+          type="text"
+          id="tokenAddress"
+          placeholder="Enter token address"
+          required
+        /><br /><br />
+
+        <label for="startTime">Start Time (Unix Timestamp):</label>
+        <input
+          type="number"
+          id="startTime"
+          placeholder="Enter start time"
+          required
+        /><br /><br />
+
+        <label for="endTime">End Time (Unix Timestamp):</label>
+        <input
+          type="number"
+          id="endTime"
+          placeholder="Enter end time"
+          required
+        /><br /><br />
+
+        <label for="rate">Rate (Tokens per ETH):</label>
+        <input
+          type="number"
+          id="rate"
+          placeholder="Enter token rate"
+          required
+        /><br /><br />
+
+        <button type="button" onclick="deployIco()">Deploy ICO</button>
+      </form>
+    </div> -->
+    <script src="https://unpkg.com/web3@latest/dist/web3.min.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/web3modal"></script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/evm-chains/lib/index.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/@walletconnect/web3-provider"
+    ></script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/fortmatic@2.0.6/dist/fortmatic.js"
+    ></script>
+    <script>
+      // Contract Addresses
+      //   const tokenAddress = "0x1F634D79de69bB91b8fFD87Be2C72A0529c3f845"; // Replace with your Token contract address
+      const tokenAddress = "0x7BEd41E1C523c5C0955C0897893c155b3DF9dcb4";
+      //   const icoAddress = "0xbEC73f66e5b44E3781DAE43543b2d69Cc5CE597F"; // Replace with your ICO contract address
+      const icoAddress = "0x2Fafba7b2D8F6Bd39842b8bD3BBa78fc5eFb36BB";
+      // ABI for Token and ICO contract (simplified)
+      const tokenABI = [
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "initialSupply",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "allowance",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "needed",
+              type: "uint256",
+            },
+          ],
+          name: "ERC20InsufficientAllowance",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "sender",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "balance",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "needed",
+              type: "uint256",
+            },
+          ],
+          name: "ERC20InsufficientBalance",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "approver",
+              type: "address",
+            },
+          ],
+          name: "ERC20InvalidApprover",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "receiver",
+              type: "address",
+            },
+          ],
+          name: "ERC20InvalidReceiver",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "sender",
+              type: "address",
+            },
+          ],
+          name: "ERC20InvalidSender",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+          ],
+          name: "ERC20InvalidSpender",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+          ],
+          name: "OwnableInvalidOwner",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "account",
+              type: "address",
+            },
+          ],
+          name: "OwnableUnauthorizedAccount",
+          type: "error",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "value",
+              type: "uint256",
+            },
+          ],
+          name: "Approval",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "previousOwner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "OwnershipTransferred",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "value",
+              type: "uint256",
+            },
+          ],
+          name: "Transfer",
+          type: "event",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+          ],
+          name: "allowance",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "value",
+              type: "uint256",
+            },
+          ],
+          name: "approve",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "account",
+              type: "address",
+            },
+          ],
+          name: "balanceOf",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "decimals",
+          outputs: [
+            {
+              internalType: "uint8",
+              name: "",
+              type: "uint8",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "mint",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "name",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "owner",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "renounceOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "symbol",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "totalSupply",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "value",
+              type: "uint256",
+            },
+          ],
+          name: "transfer",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "value",
+              type: "uint256",
+            },
+          ],
+          name: "transferFrom",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "transferOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+      ];
+
+      const icoABI = [
+        {
+          inputs: [
+            { internalType: "address", name: "_tokenAddress", type: "address" },
+            { internalType: "uint256", name: "_rate", type: "uint256" },
+            { internalType: "uint256", name: "_startTime", type: "uint256" },
+            { internalType: "uint256", name: "_endTime", type: "uint256" },
+          ],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "buyer",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "TokensPurchased",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "WithdrawBNB",
+          type: "event",
+        },
+        {
+          inputs: [],
+          name: "buyTokens",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "endTime",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "owner",
+          outputs: [{ internalType: "address", name: "", type: "address" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "rate",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "startTime",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "token",
+          outputs: [
+            { internalType: "contract IMyToken", name: "", type: "address" },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "withdrawFunds",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "withdrawUnsoldTokens",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+      ];
+
+      let web3;
+      let tokenContract;
+      let icoContract;
+      let accounts;
+
+      ("use strict");
+
+      // Unpkg imports
+      const Web3Modal = window.Web3Modal.default;
+      const WalletConnectProvider = window.WalletConnectProvider.default;
+      const EvmChains = window.EvmChains;
+      const Fortmatic = window.Fortmatic;
+
+      // Web3modal instance
+      let web3Modal;
+
+      // Chosen wallet provider given by the dialog window
+      let provider;
+
+      // Address of the selected account
+      let selectedAccount;
+
+      function init() {
+        console.log("Initializing example");
+
+        const providerOptions = {
+          walletconnect: {
+            package: WalletConnectProvider,
+            options: {
+              infuraId: "8043bb2cf99347b1bfadfb233c5325c0",
+            },
+          },
+          fortmatic: {
+            package: Fortmatic,
+            options: {
+              key: "pk_test_391E26A3B43A3350",
+            },
+          },
+        };
+
+        web3Modal = new Web3Modal({
+          cacheProvider: false,
+          providerOptions,
+        });
+      }
+
+      // Connect to MetaMask
+      async function connectWallet() {
+        if (window.ethereum) {
+          // Create an ethers.js provider from the MetaMask's injected window.ethereum object
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+
+          try {
+            // Request access to the user's wallet
+            const accounts = await provider.send("eth_requestAccounts", []);
+            // Get the signer (this represents the connected wallet)
+            const signer = provider.getSigner();
+            // Initialize the token and ICO contracts with ethers.js
+            tokenContract = new ethers.Contract(tokenAddress, tokenABI, signer);
+            icoContract = new ethers.Contract(icoAddress, icoABI, signer);
+          } catch (error) {
+            console.error("Error connecting wallet:", error);
+            alert("Failed to connect wallet");
+          }
+        } else {
+          alert("MetaMask not detected!");
+        }
+      }
+
+      async function onConnect() {
+        try {
+          provider = await web3Modal.connect();
+
+          // Create an ethers provider from the connected wallet provider
+          const ethersProvider = new ethers.providers.Web3Provider(provider);
+
+          // Get the signer (represents the wallet)
+          const signer = ethersProvider.getSigner();
+
+          // Get the connected wallet address
+          const walletAddress = await signer.getAddress();
+
+          // Log or display the connected wallet address
+          console.log("Connected wallet address:", walletAddress);
+
+          // Display the connected wallet address
+          document.getElementById("walletAddress").innerText = walletAddress;
+
+          const { chainId } = await ethersProvider.getNetwork();
+
+          // Check if the current network is the BNB testnet (chainId: 97)
+          if (chainId !== 97) {
+            try {
+              // Try to switch to the BNB testnet
+              await provider.request({
+                method: "wallet_switchEthereumChain",
+                params: [{ chainId: "0x61" }], // 0x61 is 97 in hexadecimal (BNB Testnet chain ID)
+              });
+              console.log("Switched to BNB testnet");
+            } catch (switchError) {
+              // This error code indicates the chain has not been added to MetaMask
+              if (switchError.code === 4902) {
+                try {
+                  // Add the BNB testnet chain
+                  await provider.request({
+                    method: "wallet_addEthereumChain",
+                    params: [
+                      {
+                        chainId: "0x61",
+                        chainName: "Binance Smart Chain Testnet",
+                        nativeCurrency: {
+                          name: "Binance Coin",
+                          symbol: "BNB",
+                          decimals: 18,
+                        },
+                        rpcUrls: ["https://bsc-testnet.public.blastapi.io"],
+                        blockExplorerUrls: ["https://testnet.bscscan.com"],
+                      },
+                    ],
+                  });
+                  console.log("BNB testnet added and switched");
+                } catch (addError) {
+                  console.error("Could not add BNB testnet", addError);
+                }
+              } else {
+                console.error("Could not switch to BNB testnet", switchError);
+              }
+            }
+          } else {
+            console.log("Already connected to BNB testnet");
+          }
+
+          connectWallet();
+        } catch (e) {
+          console.log("Could not get a wallet connection", e);
+          return;
+        }
+      }
+
+      // Main entry point
+      window.addEventListener("load", async () => {
+        init();
+        document
+          .querySelector("#btn-connect")
+          .addEventListener("click", onConnect);
+        document
+          .querySelector("#btn-disconnect")
+          .addEventListener("click", onDisconnect);
+      });
+      // Approve Token Transfer
+      //   async function approveTokens() {
+      //     const bnbAmount = document.getElementById("bnbAmount").value;
+      //     const tokenAmount = web3.utils.toWei(bnbAmount, "ether") * 1000; // Assuming rate 1 BNB = 1000 tokens
+      //     tokenContract = new web3.eth.Contract(tokenABI, tokenAddress);
+      //     try {
+      //       await tokenContract.methods
+      //         .approve(icoAddress, tokenAmount)
+      //         .send({ from: accounts[0] });
+      //       alert("Tokens approved for transfer");
+      //     } catch (error) {
+      //       console.error("Error approving tokens", error);
+      //       alert("Failed to approve tokens");
+      //     }
+      //   }
+
+      // Approve Tokens
+      async function transferAndApproveTokens() {
+        const bnbAmount = document.getElementById("bnbAmount").value;
+
+        // Convert BNB amount to wei (assuming 1 BNB = 1000 tokens)
+        const tokenAmount = ethers.BigNumber.from(
+          ethers.utils.parseUnits(bnbAmount, "ether")
+        ).mul(ethers.BigNumber.from(1000));
+
+        try {
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          const accounts = await provider.send("eth_requestAccounts", []);
+          const signer = provider.getSigner(); // Get the connected wallet
+
+          // Initialize the token contract
+          const tokenContract = new ethers.Contract(
+            tokenAddress,
+            tokenABI,
+            signer
+          );
+
+          // Step 1: Transfer tokens to the ICO contract
+          const transferTx = await tokenContract.transfer(
+            icoAddress,
+            tokenAmount.toString()
+          );
+          await transferTx.wait(); // Wait for the transaction to be mined
+          alert("Tokens transferred to the ICO contract");
+
+          // Step 2: Approve the ICO contract to spend the same amount of tokens
+          const approveTx = await tokenContract.approve(
+            icoAddress,
+            tokenAmount.toString()
+          );
+          await approveTx.wait(); // Wait for the transaction to be mined
+          alert("Tokens approved for transfer");
+        } catch (error) {
+          console.error("Error during transfer and approval", error);
+          alert("Failed to transfer and approve tokens");
+        }
+      }
+
+      // Buy Tokens
+      async function buyTokens() {
+        const bnbAmount = document.getElementById("bnbAmount").value;
+        console.log(bnbAmount, "BNB AMOUNT");
+
+        try {
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          await provider.send("eth_requestAccounts", []); // Request accounts from the wallet
+          const signer = provider.getSigner(); // Get the connected wallet
+
+          // Initialize the ICO contract with the signer
+          const icoContract = new ethers.Contract(icoAddress, icoABI, signer);
+          console.log(icoContract, "icoContract");
+          // Estimate gas limit
+          const gasLimit = await icoContract.estimateGas.buyTokens({
+            value: ethers.utils.parseUnits(bnbAmount, "ether"),
+          });
+
+          // Send the buyTokens transaction with the specified BNB amount
+          const tx = await icoContract.buyTokens({
+            value: ethers.utils.parseUnits(bnbAmount, "ether"), // Specify the BNB amount
+            gasLimit: gasLimit, // Use the estimated gas limit
+          });
+
+          await tx.wait(); // Wait for the transaction to be mined
+          alert("Tokens purchased successfully!");
+        } catch (error) {
+          console.error("Error buying tokens", error);
+          alert("Failed to buy tokens");
+        }
+      }
+
+      // Event Listeners
+      document
+        .getElementById("connectButton")
+        .addEventListener("click", connectWallet);
+      document
+        .getElementById("approveButton")
+        .addEventListener("click", approveTokens);
+      document.getElementById("buyButton").addEventListener("click", buyTokens);
+
+      async function deployIco() {
+        // Get input values
+        const tokenAddress = document.getElementById("tokenAddress").value;
+        const rate = document.getElementById("rate").value;
+        const startTime = document.getElementById("startTime").value;
+        const endTime = document.getElementById("endTime").value;
+        console.log(tokenAddress, rate, startTime, endTime, "Info");
+        if (!window.ethereum) {
+          alert("Please connect to MetaMask");
+          return;
+        }
+
+        // Initialize ethers provider and signer
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = provider.getSigner();
+        const accounts = await provider.send("eth_requestAccounts", []);
+        const icoBytecode =
+          "0x60806040526004361061007a575f3560e01c80638da5cb5b1161004d5780638da5cb5b14610112578063c8bdbfb61461013c578063d0febe4c14610152578063fc0c546a1461015c5761007a565b806324600fc31461007e5780632c4e722e146100945780633197cbb6146100be57806378e97925146100e8575b5f80fd5b348015610089575f80fd5b50610092610186565b005b34801561009f575f80fd5b506100a86102f0565b6040516100b591906107b8565b60405180910390f35b3480156100c9575f80fd5b506100d26102f6565b6040516100df91906107b8565b60405180910390f35b3480156100f3575f80fd5b506100fc6102fc565b60405161010991906107b8565b60405180910390f35b34801561011d575f80fd5b50610126610302565b6040516101339190610810565b60405180910390f35b348015610147575f80fd5b50610150610327565b005b61015a610554565b005b348015610167575f80fd5b5061017061077d565b60405161017d9190610884565b60405180910390f35b60015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff1614610215576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161020c906108f7565b60405180910390fd5b5f47905060015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166108fc8290811502906040515f60405180830381858888f1935050505015801561027d573d5f803e3d5ffd5b5060015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff167fceac4c050cf0bd5320be38f58d0d370278667b15662191291c09d7fb144371b3826040516102e591906107b8565b60405180910390a250565b60025481565b60045481565b60035481565b60015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b60015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff16146103b6576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016103ad906108f7565b60405180910390fd5b60045442116103fa576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016103f19061095f565b60405180910390fd5b5f805f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166370a08231306040518263ffffffff1660e01b81526004016104549190610810565b602060405180830381865afa15801561046f573d5f803e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061049391906109ab565b90505f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1663a9059cbb60015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff16836040518363ffffffff1660e01b81526004016105109291906109d6565b6020604051808303815f875af115801561052c573d5f803e3d5ffd5b505050506040513d601f19601f820116820180604052508101906105509190610a32565b5050565b600354421015801561056857506004544211155b6105a7576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161059e90610aa7565b60405180910390fd5b5f600254346105b69190610af2565b9050805f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166370a08231306040518263ffffffff1660e01b81526004016106119190610810565b602060405180830381865afa15801561062c573d5f803e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061065091906109ab565b1015610691576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161068890610b7d565b60405180910390fd5b5f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1663a9059cbb33836040518363ffffffff1660e01b81526004016106eb9291906109d6565b6020604051808303815f875af1158015610707573d5f803e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061072b9190610a32565b503373ffffffffffffffffffffffffffffffffffffffff167f8f28852646c20cc973d3a8218f7eefed58c25c909f78f0265af4818c3d4dc2718260405161077291906107b8565b60405180910390a250565b5f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b5f819050919050565b6107b2816107a0565b82525050565b5f6020820190506107cb5f8301846107a9565b92915050565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f6107fa826107d1565b9050919050565b61080a816107f0565b82525050565b5f6020820190506108235f830184610801565b92915050565b5f819050919050565b5f61084c610847610842846107d1565b610829565b6107d1565b9050919050565b5f61085d82610832565b9050919050565b5f61086e82610853565b9050919050565b61087e81610864565b82525050565b5f6020820190506108975f830184610875565b92915050565b5f82825260208201905092915050565b7f4e6f74206f776e657200000000000000000000000000000000000000000000005f82015250565b5f6108e160098361089d565b91506108ec826108ad565b602082019050919050565b5f6020820190508181035f83015261090e816108d5565b9050919050565b7f49434f206e6f7420656e646564000000000000000000000000000000000000005f82015250565b5f610949600d8361089d565b915061095482610915565b602082019050919050565b5f6020820190508181035f8301526109768161093d565b9050919050565b5f80fd5b7f4973636c616d616e7b00";
+
+        // Contract Factory for deploying the contract
+        const icoContractFactory = new ethers.ContractFactory(
+          icoABI,
+          icoBytecode,
+          signer
+        );
+
+        try {
+          // Deploy the contract
+          const gasLimit = ethers.utils.hexlify(1000000); // Adjust gas limit as needed
+          const icoContract = await icoContractFactory.deploy(
+            tokenAddress,
+            rate,
+            startTime,
+            endTime,
+            { gasLimit }
+          );
+          console.log(
+            "Transaction sent! Hash:",
+            icoContract.deployTransaction.hash
+          );
+          alert(
+            `Transaction sent! Hash: ${icoContract.deployTransaction.hash}`
+          );
+
+          // Wait for the transaction to be mined
+          const txReceipt = await provider.waitForTransaction(
+            icoContract.deployTransaction.hash
+          );
+
+          if (txReceipt.status === 0) {
+            console.log("Transaction failed!", txReceipt);
+            return alert(
+              `ICO Contract deployed failed! Address: ${txReceipt.contractAddress}`
+            );
+          } else {
+            console.log("Transaction confirmed!", txReceipt);
+            return alert(
+              `ICO Contract deployed successfully! Address: ${txReceipt.contractAddress}`
+            );
+          }
+        } catch (error) {
+          console.error("Error deploying ICO contract:", error);
+          alert("Failed to deploy ICO contract");
+        }
+      }
+
+      // Function to withdraw funds
+      async function withdrawFunds() {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        const signer = provider.getSigner();
+        const icoContract = new ethers.Contract(icoAddress, icoABI, signer);
+
+        const tx = await icoContract.withdrawFunds();
+        await tx.wait(); // Wait for the transaction to be mined
+        alert("Funds withdrawn successfully!");
+      }
+
+      // Function to withdraw unsold tokens
+      async function withdrawUnsoldTokens() {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        const signer = provider.getSigner();
+        const icoContract = new ethers.Contract(icoAddress, icoABI, signer);
+
+        const tx = await icoContract.withdrawUnsoldTokens();
+        await tx.wait(); // Wait for the transaction to be mined
+        alert("Unsold tokens withdrawn successfully!");
+      }
+
+      async function getICODetails() {
+        try {
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          await provider.send("eth_requestAccounts", []);
+          const signer = provider.getSigner();
+          const icoContract = new ethers.Contract(icoAddress, icoABI, signer);
+          const startTime = await icoContract.startTime();
+          const endTime = await icoContract.endTime();
+          const rate = await icoContract.rate();
+          const token = await icoContract.token();
+
+          const details = {
+            startTime: startTime.toString(),
+            endTime: endTime.toString(),
+            rate: rate.toString(),
+            token: token,
+          };
+
+          document.getElementById("icoDetails").innerText = JSON.stringify(
+            details,
+            null,
+            2
+          );
+        } catch (error) {
+          console.error("Error fetching ICO details", error);
+          alert("Failed to fetch ICO details");
+        }
+      }
+    </script>
+  </body>
+</html>
